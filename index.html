@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TradeSizer — Position Size &amp; RR Calculator</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <!-- ============ SIDEBAR / NAV ============ -->
+    <nav class="nav" aria-label="Primary">
+      <div class="nav__brand">
+        <span class="nav__mark">TS</span>
+        <span class="nav__title">TradeSizer</span>
+      </div>
+      <button class="nav__link is-active" data-view="dashboard" type="button">
+        <span class="nav__icon" aria-hidden="true">&#9673;</span>
+        Dashboard
+      </button>
+      <button class="nav__link" data-view="settings" type="button">
+        <span class="nav__icon" aria-hidden="true">&#9881;</span>
+        Settings
+      </button>
+      <div class="nav__foot">Position sizing. Not advice.</div>
+    </nav>
+
+    <!-- ============ DASHBOARD VIEW ============ -->
+    <main class="view" id="view-dashboard" data-view-panel="dashboard">
+      <header class="view__header">
+        <h1>Dashboard</h1>
+        <p class="view__subtitle">Chart decides the levels. TradeSizer solves the size.</p>
+      </header>
+
+      <div class="board">
+        <!-- Trade input -->
+        <section class="panel panel--form" aria-labelledby="trade-input-heading">
+          <h2 id="trade-input-heading" class="panel__heading">Trade setup</h2>
+
+          <div class="field">
+            <label for="instrument">Instrument</label>
+            <select id="instrument"></select>
+            <p class="field__status" id="instrument-status" role="status"></p>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="capital">Capital / stake</label>
+              <input id="capital" type="number" inputmode="decimal" placeholder="100" min="0" step="any" />
+            </div>
+            <div class="field">
+              <label for="direction">Direction</label>
+              <div class="segmented" role="radiogroup" aria-label="Direction">
+                <button type="button" class="segmented__btn is-active" data-direction="buy" role="radio" aria-checked="true">Buy</button>
+                <button type="button" class="segmented__btn" data-direction="sell" role="radio" aria-checked="false">Sell</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label>Target mode</label>
+            <div class="segmented" role="radiogroup" aria-label="Target mode">
+              <button type="button" class="segmented__btn is-active" data-mode="double" role="radio" aria-checked="true">Double X (profit = capital)</button>
+              <button type="button" class="segmented__btn" data-mode="custom" role="radio" aria-checked="false">Custom profit</button>
+            </div>
+          </div>
+
+          <div class="field" id="custom-profit-field" hidden>
+            <label for="desired-profit">Desired profit</label>
+            <input id="desired-profit" type="number" inputmode="decimal" placeholder="75" min="0" step="any" />
+          </div>
+
+          <div class="field-row field-row--three">
+            <div class="field">
+              <label for="entry">Entry price</label>
+              <input id="entry" type="number" inputmode="decimal" placeholder="150.000" step="any" />
+            </div>
+            <div class="field">
+              <label for="sl">Stop loss</label>
+              <input id="sl" type="number" inputmode="decimal" placeholder="149.500" step="any" />
+            </div>
+            <div class="field">
+              <label for="tp">Take profit</label>
+              <input id="tp" type="number" inputmode="decimal" placeholder="151.000" step="any" />
+            </div>
+          </div>
+
+          <div class="panel__actions">
+            <button type="button" id="calculate-btn" class="btn btn--primary">Calculate</button>
+            <button type="button" id="reset-btn" class="btn btn--ghost">Reset</button>
+          </div>
+
+          <ul class="errors" id="errors" hidden></ul>
+        </section>
+
+        <!-- Results -->
+        <section class="panel panel--results" aria-labelledby="results-heading">
+          <h2 id="results-heading" class="panel__heading">Result</h2>
+
+          <div class="hero-result" id="hero-result">
+            <span class="hero-result__label">Required lot size</span>
+            <span class="hero-result__value" id="result-lot-size">&mdash;</span>
+            <span class="hero-result__rr" id="result-rr-badge"></span>
+          </div>
+
+          <div class="result-grid" id="result-grid">
+            <div class="result-card">
+              <span class="result-card__label">SL distance</span>
+              <span class="result-card__value" id="result-sl-distance">&mdash;</span>
+            </div>
+            <div class="result-card">
+              <span class="result-card__label">TP distance</span>
+              <span class="result-card__value" id="result-tp-distance">&mdash;</span>
+            </div>
+            <div class="result-card">
+              <span class="result-card__label">Required risk</span>
+              <span class="result-card__value" id="result-required-risk">&mdash;</span>
+            </div>
+            <div class="result-card">
+              <span class="result-card__label">Theoretical lot size</span>
+              <span class="result-card__value" id="result-theoretical-lot">&mdash;</span>
+            </div>
+            <div class="result-card result-card--profit">
+              <span class="result-card__label">Profit at TP</span>
+              <span class="result-card__value" id="result-profit-tp">&mdash;</span>
+            </div>
+            <div class="result-card result-card--loss">
+              <span class="result-card__label">Loss at SL</span>
+              <span class="result-card__value" id="result-loss-sl">&mdash;</span>
+            </div>
+            <div class="result-card">
+              <span class="result-card__label">Capital after TP</span>
+              <span class="result-card__value" id="result-capital-tp">&mdash;</span>
+            </div>
+            <div class="result-card">
+              <span class="result-card__label">Capital after SL</span>
+              <span class="result-card__value" id="result-capital-sl">&mdash;</span>
+            </div>
+          </div>
+
+          <p class="empty-note" id="empty-note">Enter a trade setup and hit Calculate to see position sizing.</p>
+        </section>
+      </div>
+    </main>
+
+    <!-- ============ SETTINGS VIEW ============ -->
+    <main class="view" id="view-settings" data-view-panel="settings" hidden>
+      <header class="view__header">
+        <h1>Settings</h1>
+        <p class="view__subtitle">Broker-specific contract specifications. Nothing here is universal — enter your broker's exact MT5 values.</p>
+      </header>
+
+      <section class="panel panel--settings">
+        <div class="settings-table" id="settings-table" role="table" aria-label="Instrument settings"></div>
+
+        <div class="panel__actions">
+          <button type="button" id="add-instrument-btn" class="btn btn--ghost">Add instrument</button>
+          <button type="button" id="update-settings-btn" class="btn btn--primary">Update settings</button>
+        </div>
+
+        <p class="settings-status" id="settings-save-status" role="status"></p>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>

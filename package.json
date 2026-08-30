@@ -1,0 +1,10 @@
+{
+  "name": "tradesizer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Position-size and RR calculator for manually-charted trades.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test src/engine/calculationEngine.test.js"
+  }
+}
