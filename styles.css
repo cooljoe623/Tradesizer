@@ -145,6 +145,17 @@ select {
   color: var(--text-faint);
 }
 
+.nav__link[hidden] {
+  display: none;
+}
+
+#logout-btn {
+  color: var(--red);
+  border-top: 1px solid var(--border-soft);
+  margin-top: 8px;
+  padding-top: 12px;
+}
+
 .view {
   padding: 28px 32px 60px;
   max-width: 1080px;
@@ -551,7 +562,56 @@ select {
   }
 }
 
-/* ---------- toast (button-press confirmation) ---------- */
+/* ---------- login screen ---------- */
+
+.login-screen {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg);
+  place-items: center;
+}
+
+.login-screen.is-visible {
+  display: grid;
+}
+
+.login-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 32px 28px;
+  width: 100%;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.login-form__title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--amber);
+  font-family: var(--font-num);
+}
+
+.login-form__subtitle {
+  margin: 0 0 4px;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.login-form__error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--red);
+}
+
+.login-form__btn {
+  width: 100%;
+}
 
 .toast {
   position: fixed;

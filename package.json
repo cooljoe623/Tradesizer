@@ -5,6 +5,11 @@
   "description": "Position-size and RR calculator for manually-charted trades.",
   "type": "module",
   "scripts": {
+    "start": "node server.js",
     "test": "node --test src/engine/calculationEngine.test.js"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "node-fetch": "^3.3.2"
   }
 }

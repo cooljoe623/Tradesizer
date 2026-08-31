@@ -1,0 +1,29 @@
+[
+  {
+    "symbol": "USDJPY",
+    "unitType": "pip",
+    "pipSize": 0.01,
+    "pipValue": 6.67,
+    "minLot": 0.01,
+    "maxLot": 100,
+    "volumeStep": 0.01
+  },
+  {
+    "symbol": "XAUUSD",
+    "unitType": "tick",
+    "pipSize": 0.01,
+    "pipValue": 1.0,
+    "minLot": 0.01,
+    "maxLot": 100,
+    "volumeStep": 0.01
+  },
+  {
+    "symbol": "DXY",
+    "unitType": "tick",
+    "pipSize": 0.01,
+    "pipValue": 1.0,
+    "minLot": 0.01,
+    "maxLot": 100,
+    "volumeStep": 0.01
+  }
+]

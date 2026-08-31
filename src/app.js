@@ -3,7 +3,8 @@
  *
  * UI controller. This file owns DOM wiring only — all math lives in
  * engine/calculationEngine.js and all persistence lives in
- * data/settingsStore.js. Nothing here calls localStorage directly.
+ * data/settingsStore.js (local cache) and backend (synced source of truth).
+ * Nothing here calls localStorage directly for instrument data.
  */
 
 import {
@@ -11,12 +12,9 @@ import {
   resolveDesiredProfit,
   isInstrumentSettingsComplete,
 } from "./engine/calculationEngine.js";
-import {
-  loadInstruments,
-  saveInstruments,
-  getInstrument,
-  validateInstrument,
-} from "./data/settingsStore.js";
+import { getInstrument, validateInstrument, loadInstruments } from "./data/settingsStore.js";
+import { fetchSettings, saveSettings } from "./api.js";
+import { initLogin, showLoginScreen, handleLogout as loginHandleLogout } from "./login.js";
 
 // ---------------------------------------------------------------------------
 // Temporary, in-memory trade session state (NOT persisted — see spec §29).
@@ -33,7 +31,8 @@ const tradeSession = {
 };
 
 // A working, unsaved copy of instrument settings while the Settings page is
-// open. Nothing here touches storage until "Update settings" is clicked.
+// open. Populated from the backend on first load and every time the user
+// navigates to Settings.
 let settingsDraft = [];
 
 // ---------------------------------------------------------------------------
@@ -123,7 +122,7 @@ const fmtLots = (n) => n.toFixed(4).replace(/0+$/, "").replace(/\.$/, ".0000").p
 // Navigation
 // ---------------------------------------------------------------------------
 navLinks.forEach((link) => {
-  link.addEventListener("click", () => {
+  link.addEventListener("click", async () => {
     vibrate(HAPTIC_OK);
     const target = link.dataset.view;
     navLinks.forEach((l) => l.classList.toggle("is-active", l === link));
@@ -131,17 +130,35 @@ navLinks.forEach((link) => {
       panel.hidden = panel.dataset.viewPanel !== target;
     });
     if (target === "settings") {
-      settingsDraft = loadInstruments().map((i) => ({ ...i }));
-      renderSettingsTable();
       settingsSaveStatus.textContent = "";
+      await loadSettingsDraft();
+      renderSettingsTable();
+    }
+    // Reset the calculate form when switching back to dashboard
+    if (target === "dashboard") {
+      showErrors([]);
+      clearResults();
     }
   });
+});
+
+// Logout button
+const logoutBtn = el("logout-btn");
+if (logoutBtn) {
+  logoutBtn.addEventListener("click", async () => {
+    await loginHandleLogout();
+  });
+}
+
+// Listen for logout dispatched from login.js
+window.addEventListener("ts-logout", () => {
+  setAuth(false);
 });
 
 // ---------------------------------------------------------------------------
 // Dashboard: instrument select
 // ---------------------------------------------------------------------------
-function populateInstrumentSelect() {
+async function populateInstrumentSelect() {
   const instruments = loadInstruments();
   const previous = instrumentSelect.value;
   instrumentSelect.innerHTML = "";
@@ -161,8 +178,8 @@ function updateInstrumentStatus() {
   const instrument = getInstrument(tradeSession.instrumentSymbol);
   const complete = isInstrumentSettingsComplete(instrument);
   instrumentStatus.textContent = complete
-    ? "\u2713 Instrument settings loaded"
-    : "\u26A0 Instrument settings incomplete — configure it in Settings";
+    ? "✓ Instrument settings loaded"
+    : "⚠ Instrument settings incomplete — configure it in Settings";
   instrumentStatus.classList.toggle("is-ok", complete);
   instrumentStatus.classList.toggle("is-warn", !complete);
 }
@@ -214,7 +231,7 @@ function showErrors(errors) {
 }
 
 function clearResults() {
-  resultLotSize.textContent = "\u2014";
+  resultLotSize.textContent = "—";
   resultRrBadge.textContent = "";
   resultRrBadge.classList.remove("is-warn");
   [
@@ -226,7 +243,7 @@ function clearResults() {
     "result-loss-sl",
     "result-capital-tp",
     "result-capital-sl",
-  ].forEach((id) => (el(id).textContent = "\u2014"));
+  ].forEach((id) => (el(id).textContent = "—"));
   emptyNote.hidden = false;
   resultGrid.style.opacity = "0.45";
 }
@@ -249,7 +266,7 @@ function renderResult(result, instrument) {
   el("result-capital-sl").textContent = fmtMoney(result.capitalAfterSL);
 }
 
-calculateBtn.addEventListener("click", () => {
+calculateBtn.addEventListener("click", async () => {
   const instrument = getInstrument(tradeSession.instrumentSymbol);
 
   tradeSession.capital = capitalInput.value === "" ? NaN : Number(capitalInput.value);
@@ -307,8 +324,25 @@ resetBtn.addEventListener("click", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Settings page
+// Settings page — fetch from backend, not localStorage
 // ---------------------------------------------------------------------------
+async function loadSettingsDraft() {
+  try {
+    const result = await fetchSettings();
+    if (result.ok && Array.isArray(result.settings)) {
+      settingsDraft = result.settings.map((i) => ({ ...i }));
+      // Sync the local cache so loadInstruments() downstream works.
+      const stored = JSON.parse(localStorage.getItem("tradesizer.instruments.v1") || "[]");
+      if (JSON.stringify(stored) !== JSON.stringify(result.settings)) {
+        localStorage.setItem("tradesizer.instruments.v1", JSON.stringify(result.settings));
+      }
+    }
+  } catch {
+    // Fallback to local cache if backend is unreachable.
+    settingsDraft = loadInstruments().map((i) => ({ ...i }));
+  }
+}
+
 function renderSettingsTable() {
   settingsTable.innerHTML = "";
   settingsDraft.forEach((instrument, index) => {
@@ -403,7 +437,7 @@ addInstrumentBtn.addEventListener("click", () => {
   renderSettingsTable();
 });
 
-updateSettingsBtn.addEventListener("click", () => {
+updateSettingsBtn.addEventListener("click", async () => {
   // Normalise symbols (trim, uppercase) before validating/saving.
   const normalised = settingsDraft.map((i) => ({
     ...i,
@@ -431,11 +465,21 @@ updateSettingsBtn.addEventListener("click", () => {
     return; // atomic — nothing is saved if anything is invalid
   }
 
-  const { valid, errors } = saveInstruments(normalised);
-  if (!valid) {
+  // Save to the backend (synced source of truth).
+  try {
+    const result = await saveSettings(normalised);
+    if (!result.ok) {
+      vibrate(HAPTIC_ERROR);
+      showToast("Settings not saved — fix the errors below", "error");
+      settingsSaveStatus.textContent = result.error || "Unknown error";
+      settingsSaveStatus.classList.remove("is-ok");
+      settingsSaveStatus.classList.add("is-error");
+      return;
+    }
+  } catch (err) {
     vibrate(HAPTIC_ERROR);
-    showToast("Settings not saved — fix the errors below", "error");
-    settingsSaveStatus.textContent = errors.join(" ");
+    showToast("Save failed — check your connection", "error");
+    settingsSaveStatus.textContent = err.message;
     settingsSaveStatus.classList.remove("is-ok");
     settingsSaveStatus.classList.add("is-error");
     return;
@@ -445,16 +489,40 @@ updateSettingsBtn.addEventListener("click", () => {
   showToast("Settings updated", "success");
   settingsDraft = normalised.map((i) => ({ ...i }));
   renderSettingsTable();
-  settingsSaveStatus.textContent = "\u2713 Settings updated. The dashboard now uses these values.";
+  settingsSaveStatus.textContent = "✓ Settings updated. The dashboard now uses these values.";
   settingsSaveStatus.classList.remove("is-error");
   settingsSaveStatus.classList.add("is-ok");
 
-  // Immediately propagate to the dashboard.
-  populateInstrumentSelect();
+  // Immediately propagate to the dashboard from the backend.
+  await populateInstrumentSelect();
+});
+
+// ---------------------------------------------------------------------------
+// Auth: login / logout
+// ---------------------------------------------------------------------------
+async function setAuth(loggedIn) {
+  const logoutBtn = el("logout-btn");
+  if (loggedIn) {
+    if (logoutBtn) logoutBtn.hidden = false;
+    await loadSettingsDraft();
+    await populateInstrumentSelect();
+    showToast("Signed in", "success");
+  } else {
+    if (logoutBtn) logoutBtn.hidden = true;
+    clearResults();
+    instrumentSelect.innerHTML = "";
+    tradeSession.instrumentSymbol = null;
+    updateInstrumentStatus();
+    settingsDraft = [];
+  }
+}
+
+window.addEventListener("ts-login", async () => {
+  await setAuth(true);
 });
 
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
-populateInstrumentSelect();
+initLogin();
 clearResults();

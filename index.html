@@ -7,6 +7,10 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+  <div class="login-screen" id="login-screen" role="dialog" aria-label="Sign in" hidden>
+    <!-- Login form is built by src/login.js -->
+  </div>
+
   <div class="shell">
     <!-- ============ SIDEBAR / NAV ============ -->
     <nav class="nav" aria-label="Primary">
@@ -21,6 +25,10 @@
       <button class="nav__link" data-view="settings" type="button">
         <span class="nav__icon" aria-hidden="true">&#9881;</span>
         Settings
+      </button>
+      <button class="nav__link" id="logout-btn" type="button" hidden>
+        <span class="nav__icon" aria-hidden="true">&#128063;</span>
+        Sign out
       </button>
       <div class="nav__foot">Position sizing. Not advice.</div>
     </nav>
@@ -165,6 +173,8 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
+  <script type="module" src="src/api.js"></script>
+  <script type="module" src="src/login.js"></script>
   <script type="module" src="src/app.js"></script>
 </body>
 </html>
