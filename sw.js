@@ -2,15 +2,15 @@
  * Service Worker for TradeSizer
  *
  * Strategy:
- *   - Cache-first for static assets (HTML, CSS, JS, icons, manifest)
- *   - Network-first for API calls (/api/*) so live data is never stale
+ *   - Network-first for API calls (/api/*) — fresh data is critical
+ *   - Cache-first for all static assets (HTML, CSS, JS, icons, manifest)
  *
- * Install: precache the shell so the app loads instantly.
- * Activate: clean up old caches.
- * Fetch: serve cached assets offline, fall back to network when online.
+ * Install: precache the app shell so it loads instantly offline.
+ * Activate: delete all old caches and claim clients immediately.
+ * Fetch: serve static from cache, API from network only.
  */
 
-const CACHE_NAME = 'tradesizer-v1';
+const CACHE_NAME = 'tradesizer-v2';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
@@ -25,17 +25,19 @@ const PRECACHE_URLS = [
   '/settings.json',
 ];
 
-// ── Install: precache the app shell ──────────────────────────────────
+// ── Install: precache the app shell ──────────────────────────
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(PRECACHE_URLS);
     })
   );
+  // Skip waiting and take control immediately so the new SW
+  // intercepts every fetch from page load, not just after a refresh.
   self.skipWaiting();
 });
 
-// ── Activate: clean up old caches ────────────────────────────────────
+// ── Activate: wipe old caches and claim clients immediately ─
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -44,18 +46,17 @@ self.addEventListener('activate', (event) => {
           .filter((name) => name !== CACHE_NAME)
           .map((name) => caches.delete(name))
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// ── Fetch: cache-first for static, network-first for API ────────────
+// ── Fetch ────────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // API calls → network-first (fresh data is critical)
+  // API calls → network only (never serve stale HTML as JSON)
   if (url.pathname.startsWith('/api/')) {
-    event.respondWith(networkFirst(event.request));
+    event.respondWith(networkOnly(event.request));
     return;
   }
 
@@ -74,7 +75,7 @@ async function cacheFirst(request) {
     }
     return response;
   } catch {
-    // Offline fallback for navigation requests
+    // Offline fallback: show the app shell for page navigations
     if (request.mode === 'navigate') {
       return caches.match('/index.html');
     }
@@ -82,17 +83,15 @@ async function cacheFirst(request) {
   }
 }
 
-async function networkFirst(request) {
+/**
+ * Network-only for API calls. No cache fallback so a stale HTML
+ * page can never be served in place of JSON.
+ */
+async function networkOnly(request) {
   try {
     const response = await fetch(request);
-    if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      cache.put(request, response.clone());
-    }
     return response;
   } catch {
-    const cached = await caches.match(request);
-    if (cached) return cached;
     return new Response(
       JSON.stringify({ ok: false, error: 'Offline' }),
       { status: 503, headers: { 'Content-Type': 'application/json' } }
