@@ -29,8 +29,8 @@
   {
     "symbol": "GBPUSD",
     "unitType": "pip",
-    "pipSize": 1,
-    "pipValue": 0.0001,
+    "pipSize": 0.0001,
+    "pipValue": 1,
     "minLot": 0.01,
     "maxLot": 500,
     "volumeStep": 0.01
