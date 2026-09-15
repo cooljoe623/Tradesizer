@@ -12,7 +12,7 @@
     "symbol": "XAUUSD",
     "unitType": "tick",
     "pipSize": 0.01,
-    "pipValue": 1.0,
+    "pipValue": 1,
     "minLot": 0.01,
     "maxLot": 100,
     "volumeStep": 0.01
@@ -21,7 +21,16 @@
     "symbol": "DXY",
     "unitType": "tick",
     "pipSize": 0.01,
-    "pipValue": 1.0,
+    "pipValue": 1,
+    "minLot": 0.01,
+    "maxLot": 100,
+    "volumeStep": 0.01
+  },
+  {
+    "symbol": "GBPUSD",
+    "unitType": "pip",
+    "pipSize": 1,
+    "pipValue": 0.0001,
     "minLot": 0.01,
     "maxLot": 100,
     "volumeStep": 0.01
