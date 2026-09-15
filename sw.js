@@ -1,20 +1,18 @@
 /**
- * Service Worker for TradeSizer
+ * Service Worker for TradeSizer (deployed via Express on Render)
  *
  * Strategy:
- *   - Network-first for API calls (/api/*) — fresh data is critical
- *   - Cache-first for all static assets (HTML, CSS, JS, icons, manifest)
+ *   - API calls (/api/*): network only — never cache, never serve stale HTML as JSON
+ *   - Static assets (JS, CSS, icons, manifest): cache-first, updated on each install
+ *   - index.html: network only (always fresh from Express)
  *
- * Install: precache the app shell so it loads instantly offline.
- * Activate: delete all old caches and claim clients immediately.
- * Fetch: serve static from cache, API from network only.
+ * The install event caches JS/CSS/icons but NOT index.html.
+ * This prevents stale HTML from being served while the new service
+ * worker takes control.
  */
 
-const CACHE_NAME = 'tradesizer-v2';
-const PRECACHE_URLS = [
-  '/',
-  '/index.html',
-  '/styles.css',
+const CACHE_NAME = 'tradesizer-v3';
+const STATIC_ASSETS = [
   '/manifest.json',
   '/src/api.js',
   '/src/login.js',
@@ -23,17 +21,18 @@ const PRECACHE_URLS = [
   '/src/engine/calculationEngine.test.js',
   '/src/data/settingsStore.js',
   '/settings.json',
+  '/styles.css',
+  '/icons/icon-192x192.png',
+  '/icons/icon-512x512.png',
 ];
 
-// ── Install: precache the app shell ──────────────────────────
+// ── Install: cache only static assets (NOT index.html) ──
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_URLS);
+      return cache.addAll(STATIC_ASSETS);
     })
   );
-  // Skip waiting and take control immediately so the new SW
-  // intercepts every fetch from page load, not just after a refresh.
   self.skipWaiting();
 });
 
@@ -50,17 +49,23 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// ── Fetch ────────────────────────────────────────────────────
+// ── Fetch ──────────────────────────────────────────────────
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // API calls → network only (never serve stale HTML as JSON)
+  // API calls → never cache (prevents HTML being served as JSON)
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(networkOnly(event.request));
     return;
   }
 
-  // Everything else → cache-first
+  // index.html → always fresh from Express (never cached)
+  if (url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(networkOnly(event.request));
+    return;
+  }
+
+  // Everything else (JS, CSS, icons, manifest) → cache-first
   event.respondWith(cacheFirst(event.request));
 });
 
@@ -75,22 +80,13 @@ async function cacheFirst(request) {
     }
     return response;
   } catch {
-    // Offline fallback: show the app shell for page navigations
-    if (request.mode === 'navigate') {
-      return caches.match('/index.html');
-    }
     return new Response('Offline', { status: 503, statusText: 'Offline' });
   }
 }
 
-/**
- * Network-only for API calls. No cache fallback so a stale HTML
- * page can never be served in place of JSON.
- */
 async function networkOnly(request) {
   try {
-    const response = await fetch(request);
-    return response;
+    return await fetch(request);
   } catch {
     return new Response(
       JSON.stringify({ ok: false, error: 'Offline' }),
