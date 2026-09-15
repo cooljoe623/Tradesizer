@@ -31,8 +31,29 @@ const PORT          = process.env.PORT || 3000;
 const app = express();
 app.use(express.json());
 
-// Serve static frontend files (index.html, styles.css, src/*, settings.json)
-app.use(express.static(__dirname));
+// ── PWA-specific routes (MIME types + caching headers) ───────────────
+app.get('/manifest.json', (_req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(join(__dirname, 'manifest.json'));
+});
+
+app.get('/sw.js', (req, res) => {
+  // Service worker must be served from the root scope with the correct MIME type.
+  // No-cache so the latest version is always fetched.
+  res.setHeader('Content-Type', 'application/javascript');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(join(__dirname, 'sw.js'));
+});
+
+// Serve static frontend files (index.html, styles.css, src/*, icons/*, settings.json)
+app.use(express.static(__dirname, {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.png')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  },
+}));
 
 // ── In-memory session store: token → { email, expires } ────────────────────
 const sessions = new Map();

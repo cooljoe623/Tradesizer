@@ -522,6 +522,20 @@ window.addEventListener("ts-login", async () => {
 });
 
 // ---------------------------------------------------------------------------
+// PWA: register the service worker for offline caching
+// ---------------------------------------------------------------------------
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js');
+      console.log('ServiceWorker registered:', registration.scope);
+    } catch (err) {
+      console.warn('ServiceWorker registration failed:', err);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 initLogin();

@@ -1,0 +1,26 @@
+{
+  "name": "TradeSizer",
+  "short_name": "TradeSizer",
+  "description": "Position size and risk-to-reward calculator for manually-charted trades. Chart the levels — TradeSizer solves the size.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0c0f",
+  "theme_color": "#f2a93b",
+  "orientation": "any",
+  "categories": ["finance", "business"],
+  "lang": "en",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "prefer_related_applications": false
+}
