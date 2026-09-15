@@ -7,7 +7,7 @@ the numbers work; the chart levels are always the input, the lot size is
 always the output.
 
 No frameworks, no build step, no live price feed. Plain HTML/CSS/JS, run
-straight from a static file server.
+from a static host with a lightweight backend for cross-device sync.
 
 ## Running it locally
 
@@ -23,6 +23,11 @@ python3 -m http.server 8080
 ```
 
 Then open the printed local URL.
+
+> **Note:** The local-only mode runs the frontend without a backend. Instrument
+> settings will be read from `localStorage` (stale until you connect a backend).
+> To use the full app with login and cross-device sync, you need the backend
+> running — see [Deployment](#deployment).
 
 ## Running the tests
 
@@ -96,14 +101,32 @@ persisted — they live only in memory for the current session
 (`tradeSession` in `src/app.js`) and reset when you hit Reset or reload the
 page. Only instrument configuration is durable.
 
-## Adding a new instrument
+## Cross-device sync
+
+Instrument settings now sync across all your devices through a small
+backend. Here's how it works:
+
+1. **Sign in** with the hardcoded email and password (editable in `server.js`).
+2. On successful sign-in, a session token is stored in your browser's
+   `localStorage` and the dashboard loads the latest settings from the
+   backend.
+3. **"Update settings"** writes `settings.json` directly to this GitHub repo
+   via the backend's GitHub API proxy — the GitHub personal access token
+   never leaves the server.
+4. On any other device, sign in and the dashboard fetches the same
+   `settings.json` — your instruments are instantly available everywhere.
+
+The sync file is `settings.json` at the repo root. It is the single source
+of truth for all devices.
+
+### Adding a new instrument
 
 Two ways:
 
 - **From the UI:** Settings → "Add instrument" → fill in the symbol, unit
   type, pip/tick size, value per pip/tick per 1.00 lot, min lot, max lot,
   and volume step → "Update settings". It shows up in the Dashboard's
-  instrument dropdown immediately.
+  instrument dropdown immediately and syncs to all devices.
 - **In code:** add an entry to `SEED_INSTRUMENTS` in
   `src/data/settingsStore.js` if you want it to ship as a default the first
   time the app runs on a fresh browser.
@@ -111,11 +134,27 @@ Two ways:
 No other file needs to change — the dropdown, the settings table, and the
 calculation engine are all driven by the stored instrument list.
 
+## Login
+
+Every session starts with a sign-in screen. Credentials are checked
+against values hard-coded in `server.js` (not in the browser — the
+browser only ever sees a session token). To change your credentials,
+edit the two lines at the top of `server.js`:
+
+```js
+const APP_EMAIL    = process.env.APP_EMAIL    || 'your-email@example.com';
+const APP_PASSWORD = process.env.APP_PASSWORD || 'your-password';
+```
+
+Alternatively, set the same values as environment variables
+(`APP_EMAIL`, `APP_PASSWORD`) — env vars take precedence over the
+hard-coded defaults.
+
 ## Button feedback (vibration + toast)
 
 Every button press (Calculate, Reset, Update settings, Add/Remove
-instrument, Dashboard/Settings nav, Direction/Target mode toggles) gives
-two kinds of confirmation:
+instrument, Dashboard/Settings nav, Direction/Target mode toggles,
+Sign in, Sign out) gives two kinds of confirmation:
 
 - **Vibration**, via the browser's [Vibration API](https://developer.mozilla.org/en-US/docs/Web/API/Vibration_API)
   (`navigator.vibrate`) — a short buzz for success/neutral actions, a
@@ -143,37 +182,83 @@ markup in `index.html` can be restyled directly.
 
 ## Deploying it
 
-It's static files — any static host works. Since you already publish
-projects on GitHub Pages:
+The app has two parts: the **static frontend** (GitHub Pages) and a
+**backend server** that handles login and proxies the GitHub API.
 
-1. Commit `index.html`, `styles.css`, and `src/` to a GitHub repo.
+### Frontend — GitHub Pages
+
+Same as before:
+
+1. Commit `index.html`, `styles.css`, `src/`, `settings.json`, and
+   `server.js` to a GitHub repo.
 2. Repo → Settings → Pages → Deploy from branch → pick `main` (or
    whichever branch) and the root folder.
-3. GitHub Pages serves static files over HTTPS by default, which satisfies
-   the ES-module CORS requirement — no server config needed.
+3. GitHub Pages serves static files over HTTPS by default.
+
+### Backend — where to run it
+
+The backend (`server.js`) is a Node.js Express server. It **cannot**
+run on GitHub Pages (static-only), so it needs a separate host.
+
+**Recommended: [Railway](https://railway.app)** (no free-hour cap, generous
+free tier) or [Render](https://render.com). Both support Node.js apps and
+environment variables.
+
+Railway setup:
+1. Push this repo to GitHub.
+2. On Railway → New Project → "Deploy from GitHub repo" → pick this repo.
+3. Add these environment variables in Railway's dashboard:
+   - `APP_EMAIL` — your sign-in email
+   - `APP_PASSWORD` — your sign-in password
+   - `GITHUB_PAT` — a GitHub personal access token with `repo` scope
+   - `REPO_OWNER` — your GitHub username (default: `cooljoe623`)
+   - `REPO_NAME` — the repo name (default: `tradesizer`)
+4. Railway gives you a public URL. Point the `API_BASE` in `src/api.js`
+   to that URL (or leave it as `''` if you serve the frontend from the
+   same host).
+
+Render setup is identical — New Web Service → Deploy from GitHub → set
+the env vars above.
+
+**Important:** The `GITHUB_PAT` must have `repo` scope (full control of
+private repos, or at least `contents:write` for this repo) so the backend
+can read and write `settings.json` via the GitHub REST API.
+
+### Local deployment (quick test)
+
+```bash
+npm install
+GITHUB_PAT=ghp_... APP_EMAIL=you@example.com APP_PASSWORD=secret npm start
+```
+
+Then open `http://localhost:3000`. The backend serves the static files
+and handles API requests on the same origin, so CORS is not an issue.
 
 ## Project structure
 
 ```
 tradesizer/
-├── index.html                       # markup only — dashboard + settings skeleton
+├── index.html                       # markup — dashboard + settings + login screen
 ├── styles.css                       # all visual design, token-driven
-├── src/
-│   ├── app.js                       # DOM wiring, event handlers, rendering
-│   ├── engine/
-│   │   ├── calculationEngine.js     # pure math — no DOM, no storage
-│   │   └── calculationEngine.test.js
-│   └── data/
-│       └── settingsStore.js         # the only module that touches localStorage
-└── package.json                     # `npm test` only — no runtime dependencies
+├── settings.json                    # synced instrument data (single source of truth)
+├── server.js                        # Express backend: login + GitHub API proxy
+├── package.json                     # `npm test` + `npm start` (express + node-fetch)
+└── src/
+    ├── app.js                       # DOM wiring, event handlers, rendering, auth gate
+    ├── api.js                       # frontend API client (fetch → backend)
+    ├── login.js                     # login form builder, sign-in / sign-out
+    ├── engine/
+    │   ├── calculationEngine.js     # pure math — no DOM, no storage
+    │   └── calculationEngine.test.js
+    └── data/
+        └── settingsStore.js         # local cache layer (localStorage)
 ```
 
 ## What's deliberately NOT in v1
 
 Per the spec: no live price feed, no journaling, no multi-broker profiles,
-no auth, no spread/commission/swap/slippage modeling, no crypto/indices
+no spread/commission/swap/slippage modeling, no crypto/indices
 beyond DXY. The engine and data layer are structured so none of these
 require rebuilding the calculator — costs, for instance, would slot in as
 extra fields on the instrument settings and an extra term in
 `calculateTrade`, without touching the RR-first ordering described above.
-# Tradesizer
